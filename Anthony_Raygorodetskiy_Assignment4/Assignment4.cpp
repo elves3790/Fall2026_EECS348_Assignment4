@@ -1,147 +1,190 @@
 #include <iostream>
 #include <fstream>
-#include <vector>
 #include <string>
+#include <vector>
+#include <array>
+using namespace std;
 
 class SudokuSolver {
-public:
-    static const int SIZE = 9;
-    static const int SUBGRID = 3;
-
-    SudokuSolver() : solutionCount(0) {
-        grid.assign(SIZE, std::vector<char>(SIZE, '_'));
-    }
-
-    // Loads puzzle grid from the specified file
-    bool loadFromFile(const std::string& filename) {
-        std::ifstream inFile(filename);
-        if (!inFile) {
-            std::cerr << "Error: Could not open file " << filename << "\n";
-            return false;
-        }
-
-        std::string line;
-        int row = 0;
-        while (row < SIZE && inFile >> line) {
-            // Read valid non-whitespace characters representing cells
-            for (size_t col = 0; col < line.size() && row < SIZE; ++col) {
-                char ch = line[col];
-                if (ch == '_' || (ch >= '1' && ch <= '9')) {
-                    grid[row][col] = ch;
-                }
-            }
-            row++;
-        }
-
-        inFile.close();
-        return (row == SIZE);
-    }
-
-    // Prints the current state of the grid
-    void displayGrid() const {
-        for (int r = 0; r < SIZE; ++r) {
-            for (int c = 0; c < SIZE; ++c) {
-                std::cout << grid[r][c] << (c == SIZE - 1 ? "" : " ");
-            }
-            std::cout << "\n";
-        }
-    }
-
-    // Executes the recursive depth-first search to find all solutions
-    void solve(const std::string& filename) {
-        std::cout << "========================================\n";
-        std::cout << "Puzzle File: " << filename << "\n";
-        std::cout << "----------------------------------------\n";
-        std::cout << "Initial Puzzle:\n";
-        displayGrid();
-        std::cout << "----------------------------------------\n";
-
-        solutionCount = 0;
-        backtrack(0, 0);
-
-        if (solutionCount == 0) {
-            std::cout << "No solution found\n";
-        } else {
-            std::cout << "Total Solutions Found: " << solutionCount << "\n";
-        }
-        std::cout << "========================================\n\n";
-    }
-
 private:
-    std::vector<std::vector<char>> grid;
-    int solutionCount;
+    int grid[9][9];
 
-    // Checks row, column, and 3x3 block constraints
-    bool isValid(int row, int col, char num) const {
-        // Check row and column
-        for (int i = 0; i < SIZE; ++i) {
-            if (grid[row][i] == num || grid[i][col] == num) {
+    // Checks whether a number can be placed in a cell.
+    bool isValid(int row, int col, int num) {
+        // Check the row and column.
+        for (int i = 0; i < 9; i++) {
+            if (grid[row][i] == num)
                 return false;
-            }
+
+            if (grid[i][col] == num)
+                return false;
         }
 
-        // Check 3x3 block
-        int startRow = (row / SUBGRID) * SUBGRID;
-        int startCol = (col / SUBGRID) * SUBGRID;
-        for (int r = 0; r < SUBGRID; ++r) {
-            for (int c = 0; c < SUBGRID; ++c) {
-                if (grid[startRow + r][startCol + c] == num) {
+        // Find the top-left corner of the 3x3 block.
+        int blockRow = (row / 3) * 3;
+        int blockCol = (col / 3) * 3;
+
+        // Check the 3x3 block.
+        for (int r = blockRow; r < blockRow + 3; r++) {
+            for (int c = blockCol; c < blockCol + 3; c++) {
+                if (grid[r][c] == num)
                     return false;
-                }
             }
         }
 
         return true;
     }
 
-    // Returns all candidates (1-9) that can legally be placed at (row, col)
-    std::vector<char> getCandidates(int row, int col) const {
-        std::vector<char> candidates;
-        for (char num = '1'; num <= '9'; ++num) {
-            if (isValid(row, col, num)) {
-                candidates.push_back(num);
+    // Recursive depth-first search with backtracking.
+    void solveRecursive(int row, int col,
+                        vector<array<int, 81>>& solutions,
+                        int& solutionCount) {
+        // Stop at the end of the grid.
+        if (row == 9) {
+            array<int, 81> solution;
+            for (int r = 0; r < 9; r++) {
+                for (int c = 0; c < 9; c++) {
+                    solution[r * 9 + c] = grid[r][c];
+                }
             }
-        }
-        return candidates;
-    }
 
-    // Recursive depth-first search with backtracking
-    void backtrack(int row, int col) {
-        // End of row reached: move to the next row
-        if (col == SIZE) {
-            row++;
-            col = 0;
-        }
-
-        // Base case: all 81 cells traversed successfully
-        if (row == SIZE) {
+            solutions.push_back(solution);
             solutionCount++;
-            std::cout << "Solution #" << solutionCount << ":\n";
-            displayGrid();
-            std::cout << "\n";
-            return; // Backtrack to find any other solutions
-        }
-
-        // Skip cells already filled with clues
-        if (grid[row][col] != '_') {
-            backtrack(row, col + 1);
             return;
         }
 
-        // Deduce candidates for current empty cell
-        std::vector<char> candidates = getCandidates(row, col);
+        // Move to the next cell.
+        int nextRow = row;
+        int nextCol = col + 1;
 
-        // Exhaustively try each candidate
-        for (char candidate : candidates) {
-            grid[row][col] = candidate;       // Place candidate
-            backtrack(row, col + 1);          // Recurse to next cell
-            grid[row][col] = '_';             // Backtrack / Undo choice
+        if (nextCol == 9) {
+            nextRow++;
+            nextCol = 0;
+        }
+
+        // If the cell is already filled, skip it.
+        if (grid[row][col] != 0) {
+            solveRecursive(nextRow, nextCol,
+                           solutions, solutionCount);
+            return;
+        }
+
+        // Try every possible digit in the empty cell.
+        for (int num = 1; num <= 9; num++) {
+            if (isValid(row, col, num)) {
+                grid[row][col] = num;
+
+                solveRecursive(nextRow, nextCol,
+                               solutions, solutionCount);
+
+                // Backtrack to try another candidate.
+                grid[row][col] = 0;
+            }
+        }
+    }
+
+public:
+    // Constructor initializes all cells as empty.
+    SudokuSolver() {
+        for (int r = 0; r < 9; r++) {
+            for (int c = 0; c < 9; c++) {
+                grid[r][c] = 0;
+            }
+        }
+    }
+
+    // Reads a puzzle from a text file.
+    bool loadPuzzle(const string& filename) {
+        ifstream inputFile(filename);
+
+        if (!inputFile.is_open()) {
+            cout << "Could not open " << filename << endl;
+            return false;
+        }
+
+        char ch;
+        int count = 0;
+
+        while (inputFile.get(ch) && count < 81) {
+            if (ch >= '1' && ch <= '9') {
+                grid[count / 9][count % 9] = ch - '0';
+                count++;
+            }
+            else if (ch == '_') {
+                grid[count / 9][count % 9] = 0;
+                count++;
+            }
+            // Ignore spaces, line breaks, and other separators.
+        }
+
+        inputFile.close();
+
+        if (count != 81) {
+            cout << "Invalid puzzle format in "
+                 << filename << endl;
+            return false;
+        }
+
+        return true;
+    }
+
+    // Prints the current grid.
+    void printPuzzle() {
+        for (int r = 0; r < 9; r++) {
+            for (int c = 0; c < 9; c++) {
+                if (grid[r][c] == 0)
+                    cout << "_ ";
+                else
+                    cout << grid[r][c] << " ";
+
+                if (c == 2 || c == 5)
+                    cout << "| ";
+            }
+
+            cout << endl;
+
+            if (r == 2 || r == 5)
+                cout << "------+-------+------" << endl;
+        }
+    }
+
+    // Finds and prints every solution.
+    void solvePuzzle() {
+        vector<array<int, 81>> solutions;
+        int solutionCount = 0;
+
+        solveRecursive(0, 0, solutions, solutionCount);
+
+        if (solutionCount == 0) {
+            cout << "No solution found." << endl;
+            return;
+        }
+
+        cout << "Number of solutions found: "
+             << solutionCount << endl;
+
+        for (int s = 0; s < solutionCount; s++) {
+            cout << "\nSolution " << s + 1 << ":" << endl;
+
+            for (int r = 0; r < 9; r++) {
+                for (int c = 0; c < 9; c++) {
+                    cout << solutions[s][r * 9 + c] << " ";
+
+                    if (c == 2 || c == 5)
+                        cout << "| ";
+                }
+
+                cout << endl;
+
+                if (r == 2 || r == 5)
+                    cout << "------+-------+------" << endl;
+            }
         }
     }
 };
 
 int main() {
-    std::vector<std::string> puzzleFiles = {
+    string filenames[] = {
         "puzzle1.txt",
         "puzzle2.txt",
         "puzzle3.txt",
@@ -149,10 +192,20 @@ int main() {
         "puzzle5.txt"
     };
 
-    for (const std::string& filename : puzzleFiles) {
+    // Process all five puzzle files.
+    for (int i = 0; i < 5; i++) {
+        cout << "\n================================" << endl;
+        cout << "Puzzle file: " << filenames[i] << endl;
+        cout << "================================" << endl;
+
         SudokuSolver solver;
-        if (solver.loadFromFile(filename)) {
-            solver.solve(filename);
+
+        if (solver.loadPuzzle(filenames[i])) {
+            cout << "\nOriginal puzzle:" << endl;
+            solver.printPuzzle();
+
+            cout << "\nResults:" << endl;
+            solver.solvePuzzle();
         }
     }
 
